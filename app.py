@@ -1,4 +1,4 @@
-"""My first Streamlit web app."""
+"""A Streamlit data viz app fed with data from Eurostat."""
 
 from urllib.request import urlopen
 import json
@@ -6,8 +6,11 @@ import eurostat
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 
+
+st.set_page_config(
+    page_title="NACE Rev. 2 High-Tech Employment Choropleth Map", page_icon="🚀"
+)
 
 st.title(
     "Employment in technology and knowledge-intensive sectors by NUTS 2 "
@@ -17,17 +20,17 @@ st.title(
 st.caption("(Source: https://ec.europa.eu/eurostat/web/science-technology-innovation/)")
 
 st.markdown(
-    """This web application lets you explore employment data for the European
-        high-tech industry by country and NUTS-1/NUTS-2 division. All data is
-        sourced from Eurostat (`HTEC_EMP_REG2`) and licensed under the [Creative """
-    + "Commons Attribution 4.0 International (CC BY 4.0) licence](https://creative"
-    + """commons.org/licenses/by/4.0/ 'Creative Commons Attribution 4.0 International').
-    For definitions of high-technology manufacturing and knowledge-intensive
-    services, as well as information on the Nomenclature of Territorial Units for
-    Statistics (NUTS) and the Statistical Classification of Economic Activities
-    in the European Community (NACE Rev.2), feel free to consult Eurostat's glossary:
-    [High-tech](https://ec.europa.eu/eurostat/statistics-explained/"""
-    + "index.php?title=Glossary:High-tech)."
+    """This web application lets you explore employment data on the European
+        high-tech industry for the years 2008 to 2021, divided by sex and NUTS
+        regions. All data is sourced from Eurostat (`HTEC_EMP_REG2`) and licensed
+        under the [Creative Commons Attribution 4.0 International (CC BY 4.0) """
+    + """licence](https://creativecommons.org/licenses/by/4.0/). Definitions
+        of high-technology manufacturing and knowledge-intensive services, as well
+        as information on the Nomenclature of Territorial Units for Statistics
+        (NUTS) and the Statistical Classification of Economic Activities in the
+        European Community (NACE Rev. 2) can be found in [Eurostat's glossary]"""
+    + "(https://ec.europa.eu/eurostat/statistics-explained/index.php?title="
+    + "Glossary:High-tech)."
 )
 
 
@@ -38,19 +41,23 @@ def load_df():
     location_dict = eurostat.get_dic("geo")
     # Filter and clean data
     nace_df = nace_df[nace_df.nace_r2 == "HTC"]
-    nace_df = nace_df.rename(columns={"geo\\time": "geo"})
     nace_df = nace_df.drop(columns=["nace_r2"])
-    # Drop aggregates
+    nace_df = nace_df.rename(columns={"geo\\time": "geo"})
     nace_df = nace_df[~nace_df.geo.isin(["EU27_2020", "EU28", "EU15", "EA19"])]
     # Unpivot data
     nace_df = pd.melt(nace_df, id_vars=["sex", "geo", "unit"], var_name="year")
     # Add location names
     nace_df["location"] = nace_df.geo.apply(lambda x: location_dict[x])
-    # Rename column values
-    nace_df.sex = nace_df.sex.str.replace("T", "C")
-    nace_df.location = nace_df.location.str.replace(
-        "Germany \(until 1990 former territory of the FRG\)", "Germany"
+    # Rename row values
+    nace_df.sex = nace_df.sex.replace({"M": "Males", "F": "Females", "T": "Total"})
+    nace_df.unit = nace_df.unit.apply(
+        lambda x: "Percent" if x == "PC_EMP" else "Thousand"
     )
+    nace_df.location = nace_df.location.str.replace(
+        r"Germany \(until 1990 former territory of the FRG\)", "Germany", regex=False
+    )
+    # Rerrange columns
+    nace_df = nace_df[["year", "sex", "unit", "value", "geo", "location"]]
     return nace_df
 
 
@@ -78,35 +85,39 @@ def load_geojson():
 @st.experimental_singleton
 def update_df(nace_df, year, nuts, sex, unit):
     """Return `nace_df` changed according to user input."""
-    nuts = ["Country", "NUTS-1", "NUTS-2"].index(nuts) + 2
-    unit = "PC_EMP" if unit == "Rel." else "THS"
+    nuts = ["Countries", "NUTS 1", "NUTS 2"].index(nuts) + 2
+    unit = "Percent" if unit == "Rel." else "Thousand"
     nace_df = nace_df[
         (nace_df.year == year)
         & (nace_df.geo.str.len() == nuts)
-        & (nace_df.sex == sex[0])
+        & (nace_df.sex == sex)
         & (nace_df.unit == unit)
     ]
     return nace_df
 
 
 @st.experimental_singleton(show_spinner=False)
-def draw_figure(nace_df, json_file):
+def draw_figure(nace_df, json_file, unit):
     """Return `choropleth_mapbox` figure."""
-    figure = go.Figure(
-        px.choropleth_mapbox(
-            data_frame=nace_df,
-            geojson=json_file,
-            featureidkey="properties.id",
-            locations="geo",
-            color="value",
-            hover_name="location",
-            opacity=0.4,
-            zoom=4,
-            center={"lat": 51.163361, "lon": 10.447683},
-            mapbox_style="open-street-map",
-        )
+    figure = px.choropleth_mapbox(
+        data_frame=nace_df,
+        geojson=json_file,
+        featureidkey="properties.id",
+        locations="geo",
+        color="value",
+        hover_name="location",
+        hover_data=["geo", "value", "unit"],
+        labels={"geo": "NUTS", "value": "Value", "unit": "Unit"},
+        opacity=0.4,
+        zoom=3.7,
+        center={"lat": 51.163361, "lon": 10.447683},
+        mapbox_style="open-street-map",
     )
-    figure.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+
+    figure.update_layout(
+        coloraxis_colorbar_title_text="Thousand" if unit == "Abs." else "Percent",
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+    )
 
     return figure
 
@@ -114,16 +125,21 @@ def draw_figure(nace_df, json_file):
 YEAR = st.slider("Year", 2008, 2021, value=2021)
 col1, col2, col3 = st.columns([6, 3, 2])
 NUTS = col1.select_slider(
-    "Political Entity Level", ["Country", "NUTS-1", "NUTS-2"], value="NUTS-1"
+    "Political Entity Level", ["Countries", "NUTS 1", "NUTS 2"], value="NUTS 1"
 )
-SEX = col2.select_slider("Sex", ["Female", "Combined", "Male"], value="Combined")
-UNIT = col3.select_slider("Frequency", ["Abs.", "Rel."], value="Rel.")
+SEX = col2.select_slider("Sex", ["Females", "Total", "Males"], value="Total")
+UNIT = col3.select_slider(
+    "Unit",
+    ["Abs.", "Rel."],
+    value="Rel.",
+    help="Unit of measure: Thousand (Abs.) or Percentage of total employment (Rel.)",
+)
 
 
 df = load_df()
-updated_df = update_df(df, YEAR, NUTS, SEX, UNIT)
 geojson = load_geojson()
-fig = draw_figure(updated_df, geojson)
+updated_df = update_df(df, YEAR, NUTS, SEX, UNIT)
+fig = draw_figure(updated_df, geojson, UNIT)
 
 
 st.plotly_chart(
