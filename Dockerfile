@@ -1,11 +1,7 @@
 FROM python:3
-
+COPY . /app
 WORKDIR /app
-
-COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD streamlit run app.py
-
+EXPOSE 8501
+ENTRYPOINT ["streamlit", "run"]
+CMD ["app.py"]

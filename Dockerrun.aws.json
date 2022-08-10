@@ -1,0 +1,14 @@
+{
+  "AWSEBDockerrunVersion": "1",
+  "Image": {
+    "Name": "nikolai1/nace_r2-htc-choropleth",
+    "Update": "true"
+  },
+  "Ports": [
+    {
+      "ContainerPort": 8501,
+      "HostPort": 8501
+    }
+  ],
+  "Logging": "/var/log/nginx"
+}
