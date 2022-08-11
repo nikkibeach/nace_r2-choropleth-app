@@ -33,6 +33,16 @@ st.markdown(
     + "Glossary:High-tech)."
 )
 
+st.markdown(
+    """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """,
+    unsafe_allow_html=True,
+)
+
 
 @st.experimental_memo
 def load_df():
@@ -54,7 +64,7 @@ def load_df():
         lambda x: "Percent" if x == "PC_EMP" else "Thousand"
     )
     nace_df.location = nace_df.location.str.replace(
-        r"Germany \(until 1990 former territory of the FRG\)", "Germany", regex=False
+        "Germany (until 1990 former territory of the FRG)", "Germany", regex=False
     )
     # Rerrange columns
     nace_df = nace_df[["year", "sex", "unit", "value", "geo", "location"]]
@@ -82,7 +92,7 @@ def load_geojson():
     return nuts_geojson
 
 
-@st.experimental_singleton
+@st.experimental_memo
 def update_df(nace_df, year, nuts, sex, unit):
     """Return `nace_df` changed according to user input."""
     nuts = ["Countries", "NUTS 1", "NUTS 2"].index(nuts) + 2
@@ -151,15 +161,7 @@ st.plotly_chart(
 col1, col2 = st.columns([7, 3])
 show_df = col1.checkbox("Show DataFrame")
 col2.markdown(
-    "[View source code on GitHub](https://github.com/nikkibeach/nace_r2-choropleth-app)"
+    "[View source code on GitHub](https://github.com/nikkibeach/nace_r2-htc-choropleth-app)"
 )
 if show_df:
     st.write(updated_df.sort_values(by="value", ascending=False).reset_index(drop=True))
-
-HIDE_STREAMLIT_STYLE = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            </style>
-            """
-st.markdown(HIDE_STREAMLIT_STYLE, unsafe_allow_html=True)
